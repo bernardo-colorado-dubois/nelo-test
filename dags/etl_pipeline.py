@@ -12,7 +12,7 @@ mismas carpetas data/ y output/ del repo, montadas también ahí.
 from __future__ import annotations
 
 import pendulum
-from airflow.sdk import dag
+from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
 RAW_TABLE_PATH = "/opt/spark-data/raw_messages"
@@ -24,37 +24,34 @@ OUTPUT_CSV_PATH = "/opt/spark-output/items_flat.csv"
 MAX_MESSAGES_PER_POLL = "10"
 WAIT_TIME_SECONDS = "20"
 
-
-@dag(
+dag = DAG(
   dag_id="etl_pipeline",
   schedule=None,
   start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
   catchup=False,
   tags=["spark", "etl", "sqs"],
 )
-def etl_pipeline():
 
-  read_queue = SparkSubmitOperator(
-    task_id="read_queue",
-    application="/opt/spark-apps/read_queue.py",
-    conn_id="spark_default",
-    application_args=[
-      "--table-path", RAW_TABLE_PATH,
-      "--max-messages-per-poll", MAX_MESSAGES_PER_POLL,
-      "--wait-time-seconds", WAIT_TIME_SECONDS,
-    ],
-    verbose=True,
-  )
+read_queue = SparkSubmitOperator(
+  task_id="read_queue",
+  application="/opt/spark-apps/read_queue.py",
+  conn_id="spark_default",
+  application_args=[
+    "--table-path", RAW_TABLE_PATH,
+    "--max-messages-per-poll", MAX_MESSAGES_PER_POLL,
+    "--wait-time-seconds", WAIT_TIME_SECONDS,
+  ],
+  verbose=True,
+  dag=dag,
+)
 
-  transform_messages = SparkSubmitOperator(
-    task_id="transform_messages",
-    application="/opt/spark-apps/transform_messages.py",
-    conn_id="spark_default",
-    application_args=[RAW_TABLE_PATH, OUTPUT_CSV_PATH],
-    verbose=True,
-  )
+transform_messages = SparkSubmitOperator(
+  task_id="transform_messages",
+  application="/opt/spark-apps/transform_messages.py",
+  conn_id="spark_default",
+  application_args=[RAW_TABLE_PATH, OUTPUT_CSV_PATH],
+  verbose=True,
+  dag=dag,
+)
 
-  read_queue >> transform_messages
-
-
-etl_pipeline()
+read_queue >> transform_messages
