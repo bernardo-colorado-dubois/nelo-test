@@ -24,7 +24,7 @@ Toda la lógica de Spark de cada paso vive **como procedimiento, dentro de una s
 
 Dentro de cada `run(...)`, el procedimiento queda así, paso a paso:
 
-- `read_queue.py::run`: 0) arma su propia `SparkSession` (ver "Stack Airflow + Spark" para el detalle de esa config), dentro de un `while True` (que corta después de una vuelta si no es `--loop`) — 1) poll a SQS y parseo de cada mensaje, 2) records crudos a DataFrame con `RECORD_SCHEMA`, 3) lectura de la tabla existente y cálculo de cuántos `message_id` son nuevos, 4) upsert real (`unionByName` + `Window.partitionBy("message_id").orderBy(received_at.desc())` + quedarse con la fila 1 de cada partición), 5) escritura atómica a `.tmp` y reemplazo de la tabla.
+- `read_queue.py::run`: 0) arma su propia `SparkSession` (ver "Stack Airflow + Spark" para el detalle de esa config) — 1) un solo poll a SQS y parseo de cada mensaje, 2) records crudos a DataFrame con `RECORD_SCHEMA`, 3) lectura de la tabla existente y cálculo de cuántos `message_id` son nuevos, 4) upsert real (`unionByName` + `Window.partitionBy("message_id").orderBy(received_at.desc())` + quedarse con la fila 1 de cada partición), 5) escritura atómica a `.tmp` y reemplazo de la tabla. Sin loop propio: correrlo repetidamente (por ejemplo con un `schedule` en el DAG) es responsabilidad de quien lo invoca, no del script.
 - `transform_messages.py::run`: 0) arma su propia `SparkSession` (mismo bloque de config que en `read_queue.py`), 1) explota `body.items` en una fila por item (evento sin items → una fila con item en null), 2) asigna `id = sha256(message_id + item_id)`, 3) pivotea `item_params` a columnas dinámicas, 4) hace el join de la fila base con las columnas pivoteadas, 5) upsert contra el CSV existente (mismo patrón `unionByName` + `Window` por `id`), 6) escribe un único CSV (Spark solo sabe escribir directorios de partes, así que se escribe a una carpeta temporal y se mueve la única parte generada), 7) imprime el conteo por `event_name` y por categoría.
 
 Tanto el bloque de construcción de la `SparkSession` (paso 0) como el patrón de upsert (`unionByName` + `Window.partitionBy(key).orderBy(received_at.desc())` + `row_number == 1`) están deliberadamente duplicados entre los dos scripts en vez de extraídos a una función compartida (no existe `src/spark_session.py` ni ningún `get_spark()`) — se prefirió la duplicación a la abstracción para que cada script se pueda leer de punta a punta sin saltar a otro archivo, ni siquiera para algo tan básico como abrir la sesión de Spark.
@@ -41,7 +41,6 @@ make check-creds   # valida que las credenciales de .env no estén expiradas
 make read          # paso 1: poll a SQS + upsert en data/raw_messages/
 make transform     # paso 2: flatten + upsert en output/items_flat.csv
 make pipeline      # encadena read -> transform (default lógico del proyecto)
-make loop          # paso 1 en loop continuo (Ctrl+C para cortar)
 make clean         # borra data/, output/items_flat.csv y __pycache__
 ```
 
@@ -54,9 +53,6 @@ export PYTHONPATH=.
 
 # Paso 1: leer una vez y hacer upsert en data/raw_messages/
 python spark/read_queue.py
-
-# Paso 1 en loop continuo (long polling, WaitTimeSeconds=20)
-python spark/read_queue.py --loop
 
 # Paso 1 a otra tabla
 python spark/read_queue.py --table-path otra/ruta
@@ -80,7 +76,7 @@ Si el venv se mueve o se renombra la carpeta del proyecto, `source venv/bin/acti
 
 ## Gotchas conocidos (pipeline local)
 
-- Como `read_queue.py` no borra ni oculta mensajes, correr `--loop` cuando la cola tiene más mensajes en vuelo que `MAX_MESSAGES_PER_POLL` (10) puede traer lotes parcialmente repetidos entre polls; no afecta la integridad de la tabla (upsert por `message_id`), solo la latencia para ver mensajes nuevos.
+- Como `read_queue.py` no borra ni oculta mensajes, una cola con más mensajes en vuelo que `MAX_MESSAGES_PER_POLL` (10) puede necesitar varias corridas para verlos todos; no afecta la integridad de la tabla (upsert por `message_id`), solo cuántos mensajes nuevos aparecen en cada corrida.
 - El parser de pseudo-JSON (`src/pseudo_json.py`) solo respeta anidamiento de `{}`, `[]`, `()`; no maneja comas o llaves dentro de un valor string entre comillas. Con el formato actual de los eventos no da problema, pero es el primer punto a revisar si aparecen valores de texto con comas literales.
 - En `transform_messages.py`, si una clave de `item_params` coincide con el nombre de una columna ya existente (`message_id`, `id`, cualquier campo de item), el `join` del pivot puede generar columnas duplicadas o pisar una columna existente. No hay guardas para esto porque no se ha visto en los datos reales.
 - `spark/read_queue.py` y `spark/transform_messages.py` calculan la raíz del proyecto como `dirname(dirname(__file__))` (dos niveles arriba, porque viven en `spark/`) — si algún día se anidan en una subcarpeta más, hay que ajustar ese cálculo.

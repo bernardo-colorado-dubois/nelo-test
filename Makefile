@@ -5,7 +5,7 @@ SHELL := /bin/bash
 VENV_PY := PYTHONPATH=. venv/bin/python
 COMPOSE := docker compose
 
-.PHONY: pipeline read transform loop check-creds install clean \
+.PHONY: pipeline read transform check-creds install clean \
         stack-build stack-init stack-up stack-down stack-restart stack-ps \
         stack-logs stack-clean stack-reset stack-flower stack-airflow-shell \
         stack-spark-shell stack-trigger
@@ -20,9 +20,6 @@ read:
 
 transform:
 	$(VENV_PY) spark/transform_messages.py
-
-loop:
-	$(VENV_PY) spark/read_queue.py --loop
 
 check-creds:
 	set -a && source .env && set +a && aws sts get-caller-identity
