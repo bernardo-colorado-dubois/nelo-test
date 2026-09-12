@@ -14,15 +14,6 @@ from src.schemas import RECORD_SCHEMA
 
 load_dotenv()
 
-QUEUE_URL = os.environ["SQS_QUEUE_URL"]
-REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-
-# Script de solo lectura: nunca llama a delete_message.
-# VisibilityTimeout=0 para no ocultar mensajes a otros consumidores; no es
-# un parámetro operativo, es un invariante del diseño, por eso no se expone
-# como argumento del DAG.
-VISIBILITY_TIMEOUT = 0
-
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
 
@@ -40,7 +31,7 @@ if __name__ == "__main__":
   if "--wait-time-seconds" in sys.argv:
     wait_time_seconds = int(sys.argv[sys.argv.index("--wait-time-seconds") + 1])
 
-  sqs = boto3.client("sqs", region_name=REGION)
+  sqs = boto3.client("sqs", region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 
   # 0. Spark local[*] fuera de Docker (make pipeline); dentro del stack,
   #    docker-compose.yaml fija SPARK_MASTER_URL al cluster real.
@@ -63,12 +54,15 @@ if __name__ == "__main__":
     spark_builder = spark_builder.config("spark.driver.host", "127.0.0.1")
   spark = spark_builder.getOrCreate()
 
-  # 1. poll a SQS
+  # 1. poll a SQS. Script de solo lectura: nunca llama a delete_message.
+  #    VisibilityTimeout=0 para no ocultar mensajes a otros consumidores;
+  #    no es un parámetro operativo, es un invariante del diseño, por eso
+  #    no se expone como argumento del DAG (a diferencia de los otros dos).
   response = sqs.receive_message(
-    QueueUrl=QUEUE_URL,
+    QueueUrl=os.environ["SQS_QUEUE_URL"],
     MaxNumberOfMessages=max_messages_per_poll,
     WaitTimeSeconds=wait_time_seconds,
-    VisibilityTimeout=VISIBILITY_TIMEOUT,
+    VisibilityTimeout=0,
     MessageAttributeNames=["All"],
     AttributeNames=["All"],
   )
