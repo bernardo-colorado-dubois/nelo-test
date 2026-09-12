@@ -27,10 +27,20 @@ export:
 check-creds:
 	set -a && source .env && set +a && aws sts get-caller-identity
 
+# El constraint fija boto3/python-dotenv a las versiones que Airflow 3.3.1
+# espera (ver requirements.txt y CLAUDE.md, "Entorno local") — sin esto,
+# pip no logra resolver apache-airflow junto con el resto del archivo.
+AIRFLOW_CONSTRAINTS := https://raw.githubusercontent.com/apache/airflow/constraints-3.3.1/constraints-3.12.txt
+
 install:
 	python3 -m venv venv
 	$(VENV_PY) -m pip install --upgrade pip -q
-	$(VENV_PY) -m pip install -r requirements.txt -q
+	$(VENV_PY) -m pip install -r requirements.txt --constraint "$(AIRFLOW_CONSTRAINTS)" -q
+	@# apache-airflow-providers-apache-spark instala pyspark-client, que pisa
+	@# archivos del paquete pyspark real bajo el mismo namespace -> reinstalar
+	@# pyspark limpio encima para que import pyspark siga siendo el nuestro.
+	$(VENV_PY) -m pip uninstall -y pyspark pyspark-client -q
+	$(VENV_PY) -m pip install pyspark==3.5.3 -q
 
 clean:
 	rm -rf data output/items_flat.csv __pycache__ src/__pycache__
