@@ -11,10 +11,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_RAW_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
 DEFAULT_OUTPUT_CSV = os.path.join(PROJECT_ROOT, "output", "items_flat.csv")
 
-# item_params.value trae 4 variantes (string/int/float/double); solo una viene poblada por fila.
-VALUE_VARIANT_COLUMNS = ["string_value", "int_value", "float_value", "double_value"]
-
-
 if __name__ == "__main__":
   raw_table_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RAW_TABLE_PATH
   output_csv = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUTPUT_CSV
@@ -62,7 +58,11 @@ if __name__ == "__main__":
 
   # 3. item_params llega como una lista de {key, value}; la convertimos en columnas sueltas,
   #    una por cada key distinta que aparezca en los datos (ej. "totalPrice", "discounts", ...).
-  value_variants = [F.col(f"param.value.{column}").cast("string") for column in VALUE_VARIANT_COLUMNS]
+  # item_params.value trae 4 variantes (string/int/float/double); solo una viene poblada por fila.
+  value_variants = [
+    F.col(f"param.value.{column}").cast("string")
+    for column in ["string_value", "int_value", "float_value", "double_value"]
+  ]
   params = (
     exploded
     .select("id", F.explode("item_params").alias("param"))
