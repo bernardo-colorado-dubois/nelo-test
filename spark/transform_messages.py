@@ -15,7 +15,10 @@ DEFAULT_OUTPUT_CSV = os.path.join(PROJECT_ROOT, "output", "items_flat.csv")
 VALUE_VARIANT_COLUMNS = ["string_value", "int_value", "float_value", "double_value"]
 
 
-def run(raw_table_path=DEFAULT_RAW_TABLE_PATH, output_csv=DEFAULT_OUTPUT_CSV):
+if __name__ == "__main__":
+  raw_table_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RAW_TABLE_PATH
+  output_csv = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUTPUT_CSV
+
   # 0. Spark local[*] fuera de Docker (make pipeline); dentro del stack,
   #    docker-compose.yaml fija SPARK_MASTER_URL al cluster real.
   master_url = os.environ.get("SPARK_MASTER_URL", "local[*]")
@@ -123,15 +126,3 @@ def run(raw_table_path=DEFAULT_RAW_TABLE_PATH, output_csv=DEFAULT_OUTPUT_CSV):
   else:
     print("\n--- Conteo por categoría ---")
     print("No hay ningún campo de categoría con datos.")
-
-  return added, total
-
-
-def main():
-  raw_table_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RAW_TABLE_PATH
-  output_csv = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_OUTPUT_CSV
-  run(raw_table_path=raw_table_path, output_csv=output_csv)
-
-
-if __name__ == "__main__":
-  main()
