@@ -1,9 +1,9 @@
 """
-DAG del ETL de nelo-test: envía read_queue.py y transform_messages.py al
-cluster de Spark standalone (spark-master:7077) vía SparkSubmitOperator,
-uno detrás del otro.
+DAG del ETL de nelo-test: envía read_queue.py, transform_messages.py y
+export_csv.py al cluster de Spark standalone (spark-master:7077) vía
+SparkSubmitOperator, uno detrás del otro.
 
-Ambos scripts corren tal cual viven en la raíz del repo (montados de
+Los tres scripts corren tal cual viven en la raíz del repo (montados de
 solo lectura en /opt/spark-apps/, ver docker-compose.yaml) — nada de
 código específico de Airflow adentro de ellos. Las rutas de datos que
 usan dentro del cluster (/opt/spark-data, /opt/spark-output) son las
@@ -16,6 +16,7 @@ from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
 RAW_TABLE_PATH = "/opt/spark-data/raw_messages"
+FLAT_TABLE_PATH = "/opt/spark-data/items_flat"
 OUTPUT_CSV_PATH = "/opt/spark-output/items_flat.csv"
 
 # Parámetros operativos del poll a SQS (read_queue.py); el DAG es quien
@@ -49,9 +50,18 @@ transform_messages = SparkSubmitOperator(
   task_id="transform_messages",
   application="/opt/spark-apps/transform_messages.py",
   conn_id="spark_default",
-  application_args=[RAW_TABLE_PATH, OUTPUT_CSV_PATH],
+  application_args=[RAW_TABLE_PATH, FLAT_TABLE_PATH],
   verbose=True,
   dag=dag,
 )
 
-read_queue >> transform_messages
+export_csv = SparkSubmitOperator(
+  task_id="export_csv",
+  application="/opt/spark-apps/export_csv.py",
+  conn_id="spark_default",
+  application_args=[FLAT_TABLE_PATH, OUTPUT_CSV_PATH],
+  verbose=True,
+  dag=dag,
+)
+
+read_queue >> transform_messages >> export_csv

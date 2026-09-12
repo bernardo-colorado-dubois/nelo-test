@@ -5,7 +5,7 @@ SHELL := /bin/bash
 VENV_PY := PYTHONPATH=. venv/bin/python
 COMPOSE := docker compose
 
-.PHONY: pipeline read transform check-creds install clean \
+.PHONY: pipeline read transform export check-creds install clean \
         stack-build stack-init stack-up stack-down stack-restart stack-ps \
         stack-logs stack-clean stack-reset stack-flower stack-airflow-shell \
         stack-spark-shell stack-trigger
@@ -13,13 +13,16 @@ COMPOSE := docker compose
 # =============================================================================
 # Pipeline local (venv + Spark local[*], sin Docker) — ver CLAUDE.md
 # =============================================================================
-pipeline: read transform
+pipeline: read transform export
 
 read:
 	$(VENV_PY) spark/read_queue.py
 
 transform:
 	$(VENV_PY) spark/transform_messages.py
+
+export:
+	$(VENV_PY) spark/export_csv.py
 
 check-creds:
 	set -a && source .env && set +a && aws sts get-caller-identity
