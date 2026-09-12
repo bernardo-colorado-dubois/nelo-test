@@ -31,6 +31,7 @@ if __name__ == "__main__":
   if "--wait-time-seconds" in sys.argv:
     wait_time_seconds = int(sys.argv[sys.argv.index("--wait-time-seconds") + 1])
 
+  queue_url = os.environ["SQS_QUEUE_URL"]
   sqs = boto3.client("sqs", region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
 
   # 0. Spark local[*] fuera de Docker (make pipeline); dentro del stack,
@@ -54,15 +55,15 @@ if __name__ == "__main__":
     spark_builder = spark_builder.config("spark.driver.host", "127.0.0.1")
   spark = spark_builder.getOrCreate()
 
-  # 1. poll a SQS. Script de solo lectura: nunca llama a delete_message.
-  #    VisibilityTimeout=0 para no ocultar mensajes a otros consumidores;
-  #    no es un parámetro operativo, es un invariante del diseño, por eso
-  #    no se expone como argumento del DAG (a diferencia de los otros dos).
+  # 1. poll a SQS. VisibilityTimeout=120: mientras dura esta corrida los mensajes
+  #    quedan ocultos para otros consumidores; si el proceso se cae antes del
+  #    borrado (paso 6), vuelven a quedar visibles solos para reintentar, sin
+  #    perder nada (el upsert por message_id los vuelve a deduplicar).
   response = sqs.receive_message(
-    QueueUrl=os.environ["SQS_QUEUE_URL"],
+    QueueUrl=queue_url,
     MaxNumberOfMessages=max_messages_per_poll,
     WaitTimeSeconds=wait_time_seconds,
-    VisibilityTimeout=0,
+    VisibilityTimeout=120,
     MessageAttributeNames=["All"],
     AttributeNames=["All"],
   )
@@ -116,5 +117,16 @@ if __name__ == "__main__":
     if os.path.exists(table_path):
       shutil.rmtree(table_path)
     os.rename(tmp_path, table_path)
+
+    # 6. recién ahora que los mensajes ya quedaron durables en la tabla parquet,
+    #    se confirman (borran) de la cola — hasta 10 por llamada, un solo request.
+    delete_entries = [
+      {"Id": str(i), "ReceiptHandle": message["ReceiptHandle"]}
+      for i, message in enumerate(response["Messages"])
+    ]
+    delete_result = sqs.delete_message_batch(QueueUrl=queue_url, Entries=delete_entries)
+    failed = delete_result.get("Failed", [])
+    if failed:
+      print(f"ADVERTENCIA: no se pudieron borrar {len(failed)} mensaje(s) de la cola: {failed}")
 
   print(f"{len(records)} mensaje(s) leído(s), {added} nuevo(s) upserted en {table_path}.")
