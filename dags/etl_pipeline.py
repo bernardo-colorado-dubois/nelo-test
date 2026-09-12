@@ -18,6 +18,12 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 RAW_TABLE_PATH = "/opt/spark-data/raw_messages"
 OUTPUT_CSV_PATH = "/opt/spark-output/items_flat.csv"
 
+# Parámetros operativos del poll a SQS (read_queue.py); el DAG es quien
+# decide estos valores, no el script — ver VISIBILITY_TIMEOUT en
+# read_queue.py para el único que sigue fijo a propósito.
+MAX_MESSAGES_PER_POLL = "10"
+WAIT_TIME_SECONDS = "20"
+
 
 @dag(
   dag_id="etl_pipeline",
@@ -32,7 +38,11 @@ def etl_pipeline():
     task_id="read_queue",
     application="/opt/spark-apps/read_queue.py",
     conn_id="spark_default",
-    application_args=["--table-path", RAW_TABLE_PATH],
+    application_args=[
+      "--table-path", RAW_TABLE_PATH,
+      "--max-messages-per-poll", MAX_MESSAGES_PER_POLL,
+      "--wait-time-seconds", WAIT_TIME_SECONDS,
+    ],
     verbose=True,
   )
 

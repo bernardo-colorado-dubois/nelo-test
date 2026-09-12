@@ -17,20 +17,29 @@ load_dotenv()
 QUEUE_URL = os.environ["SQS_QUEUE_URL"]
 REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
-MAX_MESSAGES_PER_POLL = 10
-WAIT_TIME_SECONDS = 20
-
 # Script de solo lectura: nunca llama a delete_message.
-# VisibilityTimeout=0 para no ocultar mensajes a otros consumidores.
+# VisibilityTimeout=0 para no ocultar mensajes a otros consumidores; no es
+# un parámetro operativo, es un invariante del diseño, por eso no se expone
+# como argumento del DAG.
 VISIBILITY_TIMEOUT = 0
-
-NESTED_FIELDS = ["items"]
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
 
 
-def run(table_path=DEFAULT_TABLE_PATH):
+if __name__ == "__main__":
+  table_path = DEFAULT_TABLE_PATH
+  if "--table-path" in sys.argv:
+    table_path = sys.argv[sys.argv.index("--table-path") + 1]
+
+  max_messages_per_poll = 10
+  if "--max-messages-per-poll" in sys.argv:
+    max_messages_per_poll = int(sys.argv[sys.argv.index("--max-messages-per-poll") + 1])
+
+  wait_time_seconds = 20
+  if "--wait-time-seconds" in sys.argv:
+    wait_time_seconds = int(sys.argv[sys.argv.index("--wait-time-seconds") + 1])
+
   sqs = boto3.client("sqs", region_name=REGION)
 
   # 0. Spark local[*] fuera de Docker (make pipeline); dentro del stack,
@@ -57,8 +66,8 @@ def run(table_path=DEFAULT_TABLE_PATH):
   # 1. poll a SQS
   response = sqs.receive_message(
     QueueUrl=QUEUE_URL,
-    MaxNumberOfMessages=MAX_MESSAGES_PER_POLL,
-    WaitTimeSeconds=WAIT_TIME_SECONDS,
+    MaxNumberOfMessages=max_messages_per_poll,
+    WaitTimeSeconds=wait_time_seconds,
     VisibilityTimeout=VISIBILITY_TIMEOUT,
     MessageAttributeNames=["All"],
     AttributeNames=["All"],
@@ -68,7 +77,7 @@ def run(table_path=DEFAULT_TABLE_PATH):
   for message in response.get("Messages", []):
     try:
       body = json.loads(message["Body"])
-      body = expand_nested_fields(body, NESTED_FIELDS)
+      body = expand_nested_fields(body, ["items"])
     except json.JSONDecodeError:
       body = {}
 
@@ -115,15 +124,3 @@ def run(table_path=DEFAULT_TABLE_PATH):
     os.rename(tmp_path, table_path)
 
   print(f"{len(records)} mensaje(s) leído(s), {added} nuevo(s) upserted en {table_path}.")
-  return len(records), added
-
-
-def main():
-  table_path = DEFAULT_TABLE_PATH
-  if "--table-path" in sys.argv:
-    table_path = sys.argv[sys.argv.index("--table-path") + 1]
-  run(table_path=table_path)
-
-
-if __name__ == "__main__":
-  main()
