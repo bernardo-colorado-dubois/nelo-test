@@ -2,11 +2,10 @@ import os
 import shutil
 import sys
 
-from pyspark.sql import Window
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 from src.schemas import CATEGORY_FIELD_CANDIDATES, EVENT_FIELDS, ITEM_FIELDS
-from src.spark_session import get_spark
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_RAW_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
@@ -17,7 +16,26 @@ VALUE_VARIANT_COLUMNS = ["string_value", "int_value", "float_value", "double_val
 
 
 def run(raw_table_path=DEFAULT_RAW_TABLE_PATH, output_csv=DEFAULT_OUTPUT_CSV):
-  spark = get_spark("transform-flatten-upsert")
+  # 0. Spark local[*] fuera de Docker (make pipeline); dentro del stack,
+  #    docker-compose.yaml fija SPARK_MASTER_URL al cluster real.
+  master_url = os.environ.get("SPARK_MASTER_URL", "local[*]")
+  spark_builder = (
+    SparkSession.builder
+    .appName("transform-flatten-upsert")
+    .master(master_url)
+    .config("spark.sql.session.timeZone", "UTC")
+    .config("spark.ui.showConsoleProgress", "false")
+    # Algorithm v2 + umask 000: sin esto, escribir el CSV final sobre un
+    # volumen bind-mounted de Docker falla con "Failed to rename ..."
+    # (ver CLAUDE.md, "Decisiones no obvias" del stack).
+    .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    .config("spark.hadoop.fs.permissions.umask-mode", "000")
+  )
+  if master_url == "local[*]":
+    # Driver y "executor" son el mismo proceso en local[*]; fijar 127.0.0.1
+    # evita que Spark intente resolver el hostname real de la máquina.
+    spark_builder = spark_builder.config("spark.driver.host", "127.0.0.1")
+  spark = spark_builder.getOrCreate()
 
   # 1. leemos la tabla cruda y sacamos, de cada mensaje, una fila por item de su lista de items.
   #    Un evento sin items (no es de e-commerce) queda igual como una fila, con el item en null.

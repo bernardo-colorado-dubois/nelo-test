@@ -6,12 +6,11 @@ from datetime import datetime, timezone
 
 import boto3
 from dotenv import load_dotenv
-from pyspark.sql import Window
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 from src.pseudo_json import expand_nested_fields
 from src.schemas import RECORD_SCHEMA
-from src.spark_session import get_spark
 
 load_dotenv()
 
@@ -33,7 +32,27 @@ DEFAULT_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
 
 def run(table_path=DEFAULT_TABLE_PATH, loop=False):
   sqs = boto3.client("sqs", region_name=REGION)
-  spark = get_spark("read-queue-upsert")
+
+  # 0. Spark local[*] fuera de Docker (make pipeline); dentro del stack,
+  #    docker-compose.yaml fija SPARK_MASTER_URL al cluster real.
+  master_url = os.environ.get("SPARK_MASTER_URL", "local[*]")
+  spark_builder = (
+    SparkSession.builder
+    .appName("read-queue-upsert")
+    .master(master_url)
+    .config("spark.sql.session.timeZone", "UTC")
+    .config("spark.ui.showConsoleProgress", "false")
+    # Algorithm v2 + umask 000: sin esto, escribir la tabla parquet sobre
+    # un volumen bind-mounted de Docker falla con "Failed to rename ..."
+    # (ver CLAUDE.md, "Decisiones no obvias" del stack).
+    .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    .config("spark.hadoop.fs.permissions.umask-mode", "000")
+  )
+  if master_url == "local[*]":
+    # Driver y "executor" son el mismo proceso en local[*]; fijar 127.0.0.1
+    # evita que Spark intente resolver el hostname real de la máquina.
+    spark_builder = spark_builder.config("spark.driver.host", "127.0.0.1")
+  spark = spark_builder.getOrCreate()
 
   if loop:
     print(f"Leyendo continuamente de {QUEUE_URL} (solo lectura, sin borrado)...")
