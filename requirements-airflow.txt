@@ -1,0 +1,16 @@
+# Deps instaladas encima de la imagen base de Airflow (ver Dockerfile).
+# NO confundir con requirements.txt (venv local para correr los scripts
+# fuera de Docker, contra Spark local[*] — ver Makefile / CLAUDE.md).
+
+# Provider necesario para hablar con el cluster de Spark (SparkSubmitOperator).
+apache-airflow-providers-apache-spark>=6.3.2
+
+# Cliente PySpark — DEBE coincidir con SPARK_VERSION en .env / Dockerfile,
+# para que el driver (Airflow) y el cluster (spark-master/workers) hablen
+# el mismo protocolo.
+pyspark==4.1.3
+
+# read_queue.py corre como driver dentro de este contenedor (SparkSubmitOperator,
+# deploy_mode=client) y necesita hablar con SQS directamente.
+boto3
+python-dotenv

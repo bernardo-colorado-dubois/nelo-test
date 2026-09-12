@@ -27,8 +27,8 @@ VISIBILITY_TIMEOUT = 0
 
 NESTED_FIELDS = ["items"]
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_TABLE_PATH = os.path.join(BASE_DIR, "data", "raw_messages")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
 
 
 def run(table_path=DEFAULT_TABLE_PATH, loop=False):

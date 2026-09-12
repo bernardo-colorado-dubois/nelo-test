@@ -5,3 +5,12 @@ __pycache__/
 output/
 data/
 messages.json
+
+# Stack Airflow + Spark: logs/plugins/config son montados y escritos por
+# los contenedores; se versiona la carpeta (.gitkeep) pero no su contenido.
+logs/*
+!logs/.gitkeep
+plugins/*
+!plugins/.gitkeep
+config/*
+!config/.gitkeep

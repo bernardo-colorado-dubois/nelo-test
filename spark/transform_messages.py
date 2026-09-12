@@ -8,9 +8,9 @@ from pyspark.sql import functions as F
 from src.schemas import CATEGORY_FIELD_CANDIDATES, EVENT_FIELDS, ITEM_FIELDS
 from src.spark_session import get_spark
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_RAW_TABLE_PATH = os.path.join(BASE_DIR, "data", "raw_messages")
-DEFAULT_OUTPUT_CSV = os.path.join(BASE_DIR, "output", "items_flat.csv")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_RAW_TABLE_PATH = os.path.join(PROJECT_ROOT, "data", "raw_messages")
+DEFAULT_OUTPUT_CSV = os.path.join(PROJECT_ROOT, "output", "items_flat.csv")
 
 # item_params.value trae 4 variantes (string/int/float/double); solo una viene poblada por fila.
 VALUE_VARIANT_COLUMNS = ["string_value", "int_value", "float_value", "double_value"]
