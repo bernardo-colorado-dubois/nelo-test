@@ -75,7 +75,7 @@ export_csv = SparkSubmitOperator(
 upload_drive = PythonOperator(
   task_id="upload_to_drive",
   python_callable=upload_to_drive,
-  op_kwargs={"csv_path": OUTPUT_CSV_PATH, "drive_filename": "items_flat.csv"},
+  op_kwargs={"csv_path": OUTPUT_CSV_PATH, "drive_filename": "nelo_dashboard"},
   dag=dag,
 )
 

@@ -1,7 +1,11 @@
 """
 Cuarta tarea del DAG: sube output/items_flat.csv (ya generado por
-export_csv.py) a una carpeta de Google Drive, sobreescribiendo siempre
-el mismo archivo (mismo file ID) en vez de acumular una versión por corrida.
+export_csv.py) a una carpeta de Google Drive como una Google Sheet nativa
+(no un archivo .csv suelto), sobreescribiendo siempre la misma hoja (mismo
+file ID) en vez de acumular una versión por corrida. La conversión CSV ->
+Sheet la hace la propia API de Drive al mandar el body con mimeType de
+spreadsheet junto al contenido csv (tanto en create como en update) -- no
+hace falta ninguna librería de Sheets aparte.
 
 No es un job de Spark: no arma SparkSession ni corre vía SparkSubmitOperator,
 por eso vive acá (junto al DAG que lo llama vía PythonOperator) y no en
@@ -15,6 +19,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
+SHEET_MIME_TYPE = "application/vnd.google-apps.spreadsheet"
 
 
 def upload_to_drive(csv_path: str, drive_filename: str) -> None:
@@ -33,17 +38,23 @@ def upload_to_drive(csv_path: str, drive_filename: str) -> None:
   existing = drive.files().list(q=query, spaces="drive", fields="files(id)").execute()
   matches = existing.get("files", [])
 
-  # 3. mismo archivo (mismo file ID, mismo link) si ya existe; si es la
-  #    primera corrida, lo creamos en la carpeta destino.
+  # 3. mismo archivo (mismo file ID, mismo link) si ya existe -- Drive
+  #    reimporta el csv y reemplaza el contenido de la hoja ya nativa; si
+  #    es la primera corrida, lo crea directo como Sheet. En los dos casos
+  #    el mimeType de destino es el de spreadsheet, no el del csv de origen.
   media = MediaFileUpload(csv_path, mimetype="text/csv", resumable=False)
   if matches:
     file_id = matches[0]["id"]
-    drive.files().update(fileId=file_id, media_body=media).execute()
+    drive.files().update(fileId=file_id, body={"mimeType": SHEET_MIME_TYPE}, media_body=media).execute()
   else:
     file_id = (
       drive.files()
-      .create(body={"name": drive_filename, "parents": [folder_id]}, media_body=media, fields="id")
+      .create(
+        body={"name": drive_filename, "parents": [folder_id], "mimeType": SHEET_MIME_TYPE},
+        media_body=media,
+        fields="id",
+      )
       .execute()["id"]
     )
 
-  print(f"CSV subido a Drive -- file_id={file_id}")
+  print(f"Sheet actualizada en Drive -- file_id={file_id}")
