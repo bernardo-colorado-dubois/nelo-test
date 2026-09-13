@@ -2,7 +2,7 @@
 
 Pipeline en tres pasos, sobre PySpark, que consume eventos de analítica estilo GA4 e-commerce desde SQS y los deja aplanados en un CSV — con una cuarta tarea opcional que sube ese CSV a una Google Sheet en Drive cuando corre orquestado por Airflow.
 
-Para el detalle operativo completo (comandos, variables de entorno, gotchas, troubleshooting) ver [`CLAUDE.md`](./CLAUDE.md). Este README se enfoca en tres cosas: el diagrama del proceso ETL, el diagrama del DAG de Airflow, y la definición de la tabla de modelado de datos que queda en `output/items_flat.csv`.
+Este README se enfoca en tres cosas: el diagrama del proceso ETL, el diagrama del DAG de Airflow, y la definición de la tabla de modelado de datos que queda en `output/items_flat.csv`.
 
 ## Diagrama del proceso ETL
 
@@ -133,4 +133,4 @@ Una fila por **item** de evento (un evento sin items produce una única fila con
 
 En la corrida actual, las claves observadas producen estas columnas: `_el`, `discounts`, `discountt`, `error_value`, `firebase_error`, `in_stock`, `installment_price`, `number_of_installments`, `totalPrice`.
 
-> ⚠️ Si una `key` de `item_params` coincide con el nombre de una columna ya existente (por ejemplo `id` o un campo de item), el `join` del pivot puede duplicar o pisar esa columna — no hay guarda para esto porque no se ha visto en los datos reales (ver `CLAUDE.md`, "Gotchas conocidos").
+> ⚠️ Si una `key` de `item_params` coincide con el nombre de una columna ya existente (por ejemplo `id` o un campo de item), el `join` del pivot puede duplicar o pisar esa columna — no hay guarda para esto porque no se ha visto en los datos reales.
