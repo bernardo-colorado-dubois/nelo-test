@@ -58,6 +58,11 @@ x-airflow-common:
     # los jobs de Spark — /opt en el path para que `import src.schemas`
     # resuelva igual acá y en spark-master/spark-worker.
     PYTHONPATH: /opt
+    # Cuarta tarea del DAG (dags/upload_to_drive.py) -- cuenta de servicio
+    # montada de solo lectura abajo, y el ID de la carpeta destino en Drive
+    # (tiene que estar compartida como Editor con el client_email de esa key).
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/google-drive-service-account.json
+    GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
@@ -67,6 +72,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/spark:/opt/spark-apps
     - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/spark-data
     - ${AIRFLOW_PROJ_DIR:-.}/output:/opt/spark-output
+    - ${AIRFLOW_PROJ_DIR:-.}/credentials/google-drive-service-account.json:/opt/google-drive-service-account.json:ro
   logging: *default-logging
   user: "${AIRFLOW_UID:-50000}:0"
   networks: [stack]

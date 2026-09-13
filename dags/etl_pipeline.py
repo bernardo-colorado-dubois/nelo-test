@@ -1,10 +1,12 @@
 """
 DAG del ETL de nelo-test: envía read_queue.py, transform_messages.py y
 export_csv.py al cluster de Spark standalone (spark-master:7077) vía
-SparkSubmitOperator, uno detrás del otro.
+SparkSubmitOperator, uno detrás del otro, y por último sube el CSV
+resultante a Google Drive con un PythonOperator (upload_to_drive, en este
+mismo directorio — no es un job de Spark, ver ese archivo).
 
-Los tres scripts corren tal cual viven en la raíz del repo (montados de
-solo lectura en /opt/spark-apps/, ver docker-compose.yaml) — nada de
+Los tres scripts de Spark corren tal cual viven en la raíz del repo (montados
+de solo lectura en /opt/spark-apps/, ver docker-compose.yaml) — nada de
 código específico de Airflow adentro de ellos. Las rutas de datos que
 usan dentro del cluster (/opt/spark-data, /opt/spark-output) son las
 mismas carpetas data/ y output/ del repo, montadas también ahí.
@@ -14,6 +16,9 @@ from __future__ import annotations
 import pendulum
 from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from airflow.providers.standard.operators.python import PythonOperator
+
+from upload_to_drive import upload_to_drive
 
 RAW_TABLE_PATH = "/opt/spark-data/raw_messages"
 FLAT_TABLE_PATH = "/opt/spark-data/items_flat"
@@ -64,4 +69,14 @@ export_csv = SparkSubmitOperator(
   dag=dag,
 )
 
-read_queue >> transform_messages >> export_csv
+# No es un job de Spark (sin SparkSubmitOperator): corre como driver de
+# Airflow en airflow-worker-1, mismo contenedor que ya tiene el CSV montado
+# en /opt/spark-output y las credenciales de Drive (ver docker-compose.yaml).
+upload_drive = PythonOperator(
+  task_id="upload_to_drive",
+  python_callable=upload_to_drive,
+  op_kwargs={"csv_path": OUTPUT_CSV_PATH, "drive_filename": "items_flat.csv"},
+  dag=dag,
+)
+
+read_queue >> transform_messages >> export_csv >> upload_drive

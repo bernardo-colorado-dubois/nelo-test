@@ -14,3 +14,8 @@ plugins/*
 !plugins/.gitkeep
 config/*
 !config/.gitkeep
+
+# Cuarta tarea del DAG (upload_to_drive): key de la cuenta de servicio de
+# Google, nunca se commitea (mismo criterio que .env).
+credentials/*
+!credentials/.gitkeep

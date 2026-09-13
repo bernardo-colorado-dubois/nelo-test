@@ -8,3 +8,11 @@ pyspark==3.5.3
 # para la imagen de Docker real que efectivamente ejecuta el DAG.
 apache-airflow==3.3.1
 apache-airflow-providers-apache-spark==6.3.1
+
+# Mismo motivo: dags/etl_pipeline.py importa dags/upload_to_drive.py (cuarta
+# tarea del DAG) a nivel de módulo, y ese archivo importa estas dos libs --
+# sin ellas acá, `airflow dags list` local falla al parsear el DAG. El
+# pipeline local (make pipeline) no las usa, solo corren dentro del stack
+# (ver requirements-airflow.txt).
+google-api-python-client
+google-auth
